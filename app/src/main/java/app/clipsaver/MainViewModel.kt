@@ -38,12 +38,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun onSharedText(text: String) {
         val url = extractUrl(text) ?: return
         _state.update { it.copy(input = url, error = null) }
-        fetch()
+        fetch(url)
     }
 
-    fun fetch() {
+    /** Paste button uses the same immediate extraction path as an incoming Share intent. */
+    fun onPaste(text: String) {
+        val url = extractUrl(text) ?: run {
+            _state.update { it.copy(input = text.trim(), error = getApplication<Application>().getString(R.string.error_bad_link)) }
+            return
+        }
+        _state.update { it.copy(input = url, error = null) }
+        fetch(url)
+    }
+
+    fun fetch(urlOverride: String? = null) {
         val app = getApplication<Application>()
-        val url = extractUrl(_state.value.input)
+        val url = extractUrl(urlOverride ?: _state.value.input)
         if (url == null) {
             _state.update { it.copy(error = app.getString(R.string.error_bad_link)) }
             return

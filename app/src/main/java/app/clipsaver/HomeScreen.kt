@@ -99,7 +99,10 @@ fun HomeScreen(vm: MainViewModel) {
                     onChange = vm::onInputChange,
                     onPaste = {
                         val pasted = clipboard.getText()?.text.orEmpty()
-                        if (pasted.isNotBlank()) vm.onInputChange(pasted.trim())
+                        if (pasted.isNotBlank()) {
+                            focus.clearFocus()
+                            vm.onPaste(pasted.trim())
+                        }
                     },
                     onGo = {
                         focus.clearFocus()

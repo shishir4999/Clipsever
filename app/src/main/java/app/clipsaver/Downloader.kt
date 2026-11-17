@@ -10,6 +10,7 @@ import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import android.os.SystemClock
 import org.json.JSONObject
 import java.io.File
 import java.io.IOException
@@ -24,19 +25,47 @@ object Downloader {
 
     // ---------------------------------------------------------------- info
 
-    /** Asks yt-dlp about the link and turns the answer into the list of choices. */
-    suspend fun fetchInfo(context: Context, url: String): VideoDetails = withContext(Dispatchers.IO) {
-        val request = YoutubeDLRequest(url)
-        request.addOption("--dump-single-json")
-        request.addOption("--no-playlist")
-        request.addOption("--no-warnings")
-        request.addOption("--skip-download")
+    // Short-lived in-memory cache avoids repeating the expensive extraction when
+    // the user pastes or opens the same video again during the same app session.
+    private data class CachedDetails(val savedAt: Long, val details: VideoDetails)
+    private const val CACHE_TTL_MS = 5 * 60 * 1000L
+    private const val CACHE_MAX_ENTRIES = 32
+    private val infoCache = object : LinkedHashMap<String, CachedDetails>(CACHE_MAX_ENTRIES, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, CachedDetails>?): Boolean =
+            size > CACHE_MAX_ENTRIES
+    }
 
-        val response = YoutubeDL.getInstance().execute(request)
-        val raw = response.out
-        val start = raw.indexOf('{')
-        if (start < 0) throw IOException("The site returned no data")
-        parse(context, url, JSONObject(raw.substring(start)))
+    /** Extract metadata off the main thread; serialize access to the shared yt-dlp runtime. */
+    suspend fun fetchInfo(context: Context, url: String): VideoDetails = withContext(Dispatchers.IO) {
+        val key = url.trim()
+        synchronized(infoCache) {
+            infoCache[key]?.takeIf { SystemClock.elapsedRealtime() - it.savedAt < CACHE_TTL_MS }
+                ?.let { return@withContext it.details }
+        }
+
+        Engine.withYtDlpLock {
+            // Another request may have populated the cache while this one waited.
+            synchronized(infoCache) {
+                infoCache[key]?.takeIf { SystemClock.elapsedRealtime() - it.savedAt < CACHE_TTL_MS }
+                    ?.let { return@withYtDlpLock it.details }
+            }
+
+            val request = YoutubeDLRequest(key)
+            request.addOption("--dump-single-json")
+            request.addOption("--no-playlist")
+            request.addOption("--no-warnings")
+            request.addOption("--skip-download")
+
+            val response = YoutubeDL.getInstance().execute(request)
+            val raw = response.out
+            val start = raw.indexOf('{')
+            if (start < 0) throw IOException("The site returned no data")
+            val details = parse(context, key, JSONObject(raw.substring(start)))
+            synchronized(infoCache) {
+                infoCache[key] = CachedDetails(SystemClock.elapsedRealtime(), details)
+            }
+            details
+        }
     }
 
     private fun parse(context: Context, url: String, json: JSONObject): VideoDetails {
@@ -140,6 +169,7 @@ object Downloader {
      */
     suspend fun download(context: Context, job: DownloadJob, onProgress: () -> Unit): Uri =
         withContext(Dispatchers.IO) {
+            Engine.withYtDlpLock {
             val base = context.getExternalFilesDir(null) ?: context.cacheDir
             val tmpDir = File(base, "tmp/${job.id}")
             tmpDir.mkdirs()
@@ -170,6 +200,7 @@ object Downloader {
                 saveToDownloads(context, result)
             } finally {
                 tmpDir.deleteRecursively()
+            }
             }
         }
 
