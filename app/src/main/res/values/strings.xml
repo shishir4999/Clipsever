@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ClipSaver</string>
+    <string name="hint_link">Paste a video link</string>
+    <string name="btn_paste">Paste</string>
+    <string name="btn_get">Get formats</string>
+    <string name="clear">Clear</string>
+    <string name="tab_video">Video</string>
+    <string name="tab_audio">Audio</string>
+    <string name="sheet_download">Download</string>
+    <string name="fetching">Fetching video info…</string>
+    <string name="engine_loading">Preparing the download engine…</string>
+    <string name="engine_failed">Download engine failed to start: %1$s</string>
+    <string name="engine_updating">Updating the engine…</string>
+    <string name="engine_update">Update engine</string>
+    <string name="engine_updated">Engine is up to date</string>
+    <string name="engine_update_failed">Engine update failed: %1$s</string>
+    <string name="downloads">Downloads</string>
+    <string name="empty_downloads">Nothing here yet. Paste a link above, or share a link from YouTube, Facebook or Instagram and choose this app.</string>
+    <string name="status_queued">Waiting in queue</string>
+    <string name="status_cancelled">Cancelled</string>
+    <string name="status_done">Done · saved in Downloads/ClipSaver</string>
+    <string name="cancel">Cancel</string>
+    <string name="open">Open</string>
+    <string name="remove">Remove</string>
+    <string name="error_generic">Could not get video info: %1$s</string>
+    <string name="error_bad_link">Enter a valid link (starting with https://).</string>
+    <string name="error_playlist">This looks like a playlist or channel link. Use the link of a single video.</string>
+    <string name="opt_best">Best quality</string>
+    <string name="opt_mp3_high">MP3 · best quality</string>
+    <string name="opt_mp3_128">MP3 · 128 kbps (smaller file)</string>
+    <string name="opt_m4a">M4A · AAC</string>
+    <string name="eta_left">%1$s left</string>
+    <string name="notif_title">Downloading</string>
+    <string name="notif_channel">Downloads</string>
+    <string name="notif_done">Download complete</string>
+    <string name="no_player">No app found to open this file</string>
+</resources>
