@@ -169,6 +169,7 @@ object Downloader {
      */
     suspend fun download(context: Context, job: DownloadJob, onProgress: () -> Unit): Uri =
         withContext(Dispatchers.IO) {
+            Engine.withYtDlpLock {
             val base = context.getExternalFilesDir(null) ?: context.cacheDir
             val tmpDir = File(base, "tmp/${job.id}")
             tmpDir.mkdirs()
@@ -199,6 +200,7 @@ object Downloader {
                 saveToDownloads(context, result)
             } finally {
                 tmpDir.deleteRecursively()
+            }
             }
         }
 
