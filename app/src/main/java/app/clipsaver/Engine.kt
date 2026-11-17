@@ -7,6 +7,9 @@ import com.yausername.youtubedl_android.YoutubeDL
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,10 +23,12 @@ sealed interface EngineState {
 
 /**
  * Owns the yt-dlp engine: first-run setup (unpacks Python + FFmpeg) and updates.
- * YouTube changes often, so the engine tries to update itself once per app start.
+ * Initialization is kept separate from updates so app startup stays fast.
  */
 object Engine {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val ytDlpMutex = Mutex()
+    private val updateRequested = AtomicBoolean(false)
 
     private val _state = MutableStateFlow<EngineState>(EngineState.Loading)
     val state: StateFlow<EngineState> = _state.asStateFlow()
@@ -44,26 +49,34 @@ object Engine {
                 _state.value = EngineState.Failed(t.message ?: t.javaClass.simpleName)
                 return@launch
             }
-            update(app)
         }
     }
 
+    /**
+     * Run yt-dlp operations through one lock. The embedded yt-dlp runtime is shared,
+     * so an update must never race with metadata extraction or a download.
+     */
+    suspend fun <T> withYtDlpLock(block: suspend () -> T): T =
+        ytDlpMutex.withLock { block() }
+
     fun requestUpdate(context: Context) {
         val appContext = context.applicationContext
-        scope.launch { update(appContext) }
-    }
-
-    private fun update(context: Context) {
-        if (!_updating.compareAndSet(false, true)) return
-        _updateResult.value = null
-        try {
-            YoutubeDL.getInstance().updateYoutubeDL(context)
-            _updateResult.value = context.getString(R.string.engine_updated)
-        } catch (t: Throwable) {
-            val reason = (t.message ?: t.javaClass.simpleName).take(200)
-            _updateResult.value = context.getString(R.string.engine_update_failed, reason)
-        } finally {
-            _updating.value = false
+        if (!updateRequested.compareAndSet(false, true)) return
+        scope.launch {
+            _updating.value = true
+            _updateResult.value = null
+            try {
+                ytDlpMutex.withLock {
+                    YoutubeDL.getInstance().updateYoutubeDL(appContext)
+                }
+                _updateResult.value = appContext.getString(R.string.engine_updated)
+            } catch (t: Throwable) {
+                val reason = (t.message ?: t.javaClass.simpleName).take(200)
+                _updateResult.value = appContext.getString(R.string.engine_update_failed, reason)
+            } finally {
+                _updating.value = false
+                updateRequested.set(false)
+            }
         }
     }
 }
